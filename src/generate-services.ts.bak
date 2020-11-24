@@ -111,22 +111,21 @@ function generateRegularRpcMethod(
   }
   let inputType = requestType(typeMap, methodDesc, options);
   return requestFn
-    .addParameter('data', inputType)
-    .addParameter('config?', 'any')
-    // .addStatement('const data = %L.encode(request).finish()', inputType)
+    .addParameter('request', inputType)
+    .addStatement('const data = %L.encode(request).finish()', inputType)
     .addStatement(
-      'return this.rpc.send("%L.%L/" + %S, %L, %L)',
+      'const promise = this.rpc.request(%L"%L.%L", %S, %L)',
+      options.useContext ? 'ctx, ' : '', // sneak ctx in as the 1st parameter to our rpc call
       fileDesc.package,
       serviceDesc.name,
       methodDesc.name,
-      'data',
-      'config'
+      'data'
     )
-    // .addStatement(
-    //   'return promise.then(data => %L.decode(new %T(data)))',
-    //   responseType(typeMap, methodDesc, options),
-    //   'Reader@protobufjs/minimal'
-    // )
+    .addStatement(
+      'return promise.then(data => %L.decode(new %T(data)))',
+      responseType(typeMap, methodDesc, options),
+      'Reader@protobufjs/minimal'
+    )
     .returns(responsePromise(typeMap, methodDesc, options));
 }
 
@@ -264,18 +263,15 @@ function generateCachingRpcMethod(
  * types.
  */
 export function generateRpcType(options: Options): InterfaceSpec {
-  const data = TypeNames.anyType('any');
-  const config = TypeNames.anyType('any');
-  let fn = FunctionSpec.create('send');
+  const data = TypeNames.anyType('Uint8Array');
+  let fn = FunctionSpec.create('request');
   if (options.useContext) {
     fn = fn.addParameter('ctx', 'Context');
   }
   fn = fn
-    // .addParameter('service', TypeNames.STRING)
-    // .addParameter('method', TypeNames.STRING)
-    .addParameter('url', TypeNames.STRING)
+    .addParameter('service', TypeNames.STRING)
+    .addParameter('method', TypeNames.STRING)
     .addParameter('data', data)
-    .addParameter('config', config)
     .returns(TypeNames.PROMISE.param(data));
   let rpc = InterfaceSpec.create('Rpc');
   if (options.useContext) {
